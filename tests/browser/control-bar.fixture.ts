@@ -3,6 +3,7 @@ import { ControlBarStateStore } from '../../src/content/control-bar/state.js';
 const calls: any[] = [], requests: any[] = [];
 (globalThis as any).chrome = { storage: {local: {get: (_: any, cb: any) => cb({}), set: () => Promise.resolve()}}, runtime: { sendMessage: (message: any, cb: any) => { calls.push(message); if(cb) requests.push(cb); return Promise.resolve(); } } };
 const check = (ok: any, message: string) => { if(!ok) throw Error(message); };
+async function run() {
 try {
 const store = new ControlBarStateStore();
 const ui = new ControlBarUI(store);
@@ -48,6 +49,20 @@ check(el('.search-results-list').textContent!.includes('Retry search'),'Retry mi
 el('.search-cut-btn').click();
 check(root.activeElement===el('.search-btn'),'Search focus not restored');
 el('.preview-toggle-btn').click();
+const resize = el('.preview-resize-handle');
+const preview = el('.video-preview-window');
+const original = preview.getBoundingClientRect();
+resize.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowRight', bubbles: true}));
+check(preview.getBoundingClientRect().width === original.width + 10, 'Preview resize failed');
+check(JSON.parse(localStorage.getItem('yt_preview_size')!).width === original.width + 10, 'Preview size not saved');
+for (let i = 0; i < 100; i++) {
+  resize.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowRight', shiftKey: true, bubbles: true}));
+  resize.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowDown', shiftKey: true, bubbles: true}));
+}
+const enlarged = preview.getBoundingClientRect();
+check(enlarged.right <= innerWidth - 7 && enlarged.bottom <= innerHeight - 7 && enlarged.left >= 8 && enlarged.top >= 8, 'Resized preview exceeds viewport');
+resize.dispatchEvent(new MouseEvent('dblclick', {bubbles: true}));
+check(preview.getBoundingClientRect().width === 360 && preview.getBoundingClientRect().height === 210, 'Preview reset failed');
 const beforeFocus = calls.length;
 el('.preview-fullscreen-btn').click();
 el('.preview-open-yt').click();
@@ -78,5 +93,29 @@ check(root.querySelectorAll(selector).length===1,'Duplicate skip button');
 check(getComputedStyle(el(selector)).display!=='none','Skip button hidden');
 el(selector).click(); check(calls.at(-1).payload.delta===delta,'Skip command incorrect');
 }
+const dock = el('.bar-container');
+const host = document.querySelector('yt-global-control-bar')!;
+el('.hide-btn').click();
+const retract = dock.getAnimations()[0];
+check(!!retract, 'Minimize animation did not start');
+retract.pause();
+retract.currentTime = 260;
+check(getComputedStyle(dock).clipPath !== 'none' && getComputedStyle(dock).translate !== 'none', 'Tape animation does not affect the dock');
+el('.hide-btn').click();
+check(dock.getAnimations().length === 1, 'Repeated click started overlapping animations');
+retract.finish();
+await retract.finished;
+await Promise.resolve();
+check(host.classList.contains('pill-mode') && !dock.inert, 'Minimize did not finish cleanly');
+el('.floating-pill').click();
+const extend = dock.getAnimations()[0];
+check(!!extend, 'Expand animation did not start');
+extend.finish();
+await extend.finished;
+await Promise.resolve();
+check(!host.classList.contains('pill-mode') && !host.classList.contains('tape-transition') && !dock.inert, 'Expand did not restore the dock');
 const report=document.createElement('pre');report.id='test-result';report.textContent='PASS: stable queue DOM, scroll and focus; queue filter, jump and playback; search race handling, clear, retry, keyboard navigation and focus; previous command and preview layout; skip buttons and single-toggle like/unlike animations.';document.body.append(report);
 } catch(error) {const report=document.createElement('pre');report.id='test-result';report.textContent='FAIL: '+String(error);document.body.append(report);}
+
+}
+void run();

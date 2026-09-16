@@ -548,6 +548,14 @@ export class ControlBarUI {
       </div>
     `;
 
+    const resizeHandle = document.createElement('button');
+    resizeHandle.className = 'preview-resize-handle';
+    resizeHandle.type = 'button';
+    resizeHandle.title = 'Drag to resize · Arrow keys to adjust · Double-click to reset';
+    resizeHandle.setAttribute('aria-label', 'Resize video preview');
+    resizeHandle.textContent = '◢';
+    previewWindow.appendChild(resizeHandle);
+
     // 4. YouTube Search Modal Backdrop
     const searchBackdrop = document.createElement('div');
     searchBackdrop.className = 'yt-search-backdrop';
@@ -701,6 +709,49 @@ export class ControlBarUI {
     } catch {}
   }
 
+  private async animatePillMode(pill: boolean): Promise<void> {
+    if (this.isAnimatingPill || this.isPillMode === pill) return;
+    this.isSettingsOpen = false;
+    this.settingsPopover.classList.remove('open');
+    this.isQueueOpen = false;
+    this.queuePanel.classList.remove('open');
+    this.isQualityOpen = false;
+    this.qualityPopover.classList.remove('open');
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      this.setPillMode(pill);
+      return;
+    }
+    this.isAnimatingPill = true;
+    this.hostElement.classList.add('tape-transition');
+    this.container.inert = true;
+    this.floatingPill.inert = true;
+    const bar = this.container.getBoundingClientRect();
+    const box = this.floatingPill.getBoundingClientRect();
+    const verticalInset = Math.max(0, (bar.height - box.height) / 2);
+    const expanded = { translate: '0px 0px', clipPath: 'inset(0px 0px 0px 0px round 36px)' };
+    const retracted = {
+      translate: `${box.left - bar.left}px ${box.top - bar.top - verticalInset}px`,
+      clipPath: `inset(${verticalInset}px ${Math.max(0, bar.width - box.width)}px ${verticalInset}px 0px round 27px)`
+    };
+    const animation = this.container.animate(pill ? [expanded, retracted] : [retracted, expanded], {
+      duration: pill ? 520 : 620,
+      easing: pill ? 'cubic-bezier(0.65, 0, 0.35, 1)' : 'cubic-bezier(0.16, 1, 0.3, 1)',
+      fill: 'both'
+    });
+    try {
+      await animation.finished;
+    } catch {
+      // Finish in the requested state even if the browser cancels the animation.
+    } finally {
+      this.setPillMode(pill);
+      animation.cancel();
+      this.hostElement.classList.remove('tape-transition');
+      this.container.inert = false;
+      this.floatingPill.inert = false;
+      this.isAnimatingPill = false;
+    }
+  }
+
   private setTheme(theme: 'dark' | 'light'): void {
     this.currentTheme = theme;
     this.darkThemeBtn.classList.toggle('active', theme === 'dark');
@@ -805,23 +856,10 @@ export class ControlBarUI {
   }
 
   private attachEventListeners(): void {
-    // Floating Circular Pill Click -> Expands into full bar with smooth elastic transition
-    this.floatingPill.addEventListener('click', (e) => {
-      if ((e.target as HTMLElement).closest('.pill-cut-btn')) return;
-      if (this.isAnimatingPill) return;
-      this.isAnimatingPill = true;
-      this.floatingPill.classList.add('elastic-burst');
-
-      setTimeout(() => {
-        this.floatingPill.classList.remove('elastic-burst');
-        this.setPillMode(false);
-        this.container.classList.add('elastic-expanding');
-
-        setTimeout(() => {
-          this.container.classList.remove('elastic-expanding');
-          this.isAnimatingPill = false;
-        }, 360);
-      }, 100);
+    // Extend the dock from the same case it retracts into.
+    this.floatingPill.addEventListener('click', (event) => {
+      if ((event.target as Element).closest('.pill-cut-btn')) return;
+      void this.animatePillMode(false);
     });
 
     // Pill Cut Button Click -> Closes the controller
@@ -833,23 +871,8 @@ export class ControlBarUI {
       this.store.close();
     });
 
-    // Hide Button on Dock (Chevron Left) -> Rubber-band snaps & slides left into floating pill
     this.hideBtn.addEventListener('click', () => {
-      if (this.isAnimatingPill) return;
-      this.isAnimatingPill = true;
-      this.isSettingsOpen = false;
-      this.settingsPopover.classList.remove('open');
-      this.isQueueOpen = false;
-      this.queuePanel.classList.remove('open');
-      this.isQualityOpen = false;
-      this.qualityPopover.classList.remove('open');
-
-      this.container.classList.add('elastic-minimizing');
-      setTimeout(() => {
-        this.container.classList.remove('elastic-minimizing');
-        this.setPillMode(true);
-        this.isAnimatingPill = false;
-      }, 300);
+      void this.animatePillMode(true);
     });
 
     // Shuffle Button Toggle
@@ -925,6 +948,7 @@ export class ControlBarUI {
     // Video Preview Controls
     // Floating Video Preview Dragging
     this.setupPreviewDragging();
+    this.setupPreviewResizing();
 
     // Video Preview Top Actions
     this.previewCloseBtn.addEventListener('click', (e) => {
@@ -1576,12 +1600,93 @@ export class ControlBarUI {
   private togglePreview(): void {
     this.isPreviewOpen = !this.isPreviewOpen;
     this.videoPreviewWindow.classList.toggle('open', this.isPreviewOpen);
-    if (this.isPreviewOpen) this.updateView();
+    if (this.isPreviewOpen) {
+      this.fitPreviewToViewport();
+      this.updateView();
+    }
   }
 
   private closePreview(): void {
     this.isPreviewOpen = false;
     this.videoPreviewWindow.classList.remove('open');
+  }
+
+  private fitPreviewToViewport(): void {
+    const preview = this.videoPreviewWindow;
+    const width = Math.min(parseFloat(preview.style.width) || 360, Math.max(1, window.innerWidth - 16));
+    const height = Math.min(parseFloat(preview.style.height) || 210, Math.max(1, window.innerHeight - 16));
+    preview.style.width = `${width}px`;
+    preview.style.height = `${height}px`;
+    const rect = preview.getBoundingClientRect();
+    preview.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))}px`;
+    preview.style.top = `${Math.max(8, Math.min(rect.top, window.innerHeight - height - 8))}px`;
+    preview.style.right = 'auto';
+    preview.style.bottom = 'auto';
+  }
+
+  private setupPreviewResizing(): void {
+    const preview = this.videoPreviewWindow;
+    const handle = preview.querySelector<HTMLButtonElement>('.preview-resize-handle')!;
+    let start: { x: number; y: number; width: number; height: number; pointerId: number } | null = null;
+    try {
+      const size = JSON.parse(localStorage.getItem('yt_preview_size') || 'null');
+      if (Number.isFinite(size?.width) && Number.isFinite(size?.height)) {
+        preview.style.width = `${Math.max(320, size.width)}px`;
+        preview.style.height = `${Math.max(180, size.height)}px`;
+      }
+    } catch {}
+    const save = () => {
+      try {
+        const rect = preview.getBoundingClientRect();
+        localStorage.setItem('yt_preview_size', JSON.stringify({ width: rect.width, height: rect.height }));
+        localStorage.setItem('yt_preview_x', String(rect.left));
+        localStorage.setItem('yt_preview_y', String(rect.top));
+      } catch {}
+    };
+    const resize = (width: number, height: number) => {
+      preview.style.width = `${Math.max(1, Math.min(Math.max(320, width), window.innerWidth - 16))}px`;
+      preview.style.height = `${Math.max(1, Math.min(Math.max(180, height), window.innerHeight - 16))}px`;
+      this.fitPreviewToViewport();
+    };
+    handle.addEventListener('pointerdown', event => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      this.fitPreviewToViewport();
+      const rect = preview.getBoundingClientRect();
+      start = { x: event.clientX, y: event.clientY, width: rect.width, height: rect.height, pointerId: event.pointerId };
+      handle.setPointerCapture(event.pointerId);
+    });
+    handle.addEventListener('pointermove', event => {
+      if (!start || event.pointerId !== start.pointerId) return;
+      resize(start.width + event.clientX - start.x, start.height + event.clientY - start.y);
+    });
+    const finish = () => { if (start) { start = null; save(); } };
+    handle.addEventListener('pointerup', event => {
+      if (!start || event.pointerId !== start.pointerId) return;
+      finish();
+      if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+    });
+    handle.addEventListener('pointercancel', finish);
+    handle.addEventListener('lostpointercapture', finish);
+    handle.addEventListener('keydown', event => {
+      if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const rect = preview.getBoundingClientRect();
+      const step = event.shiftKey ? 40 : 10;
+      resize(rect.width + (event.key === 'ArrowRight' ? step : event.key === 'ArrowLeft' ? -step : 0),
+        rect.height + (event.key === 'ArrowDown' ? step : event.key === 'ArrowUp' ? -step : 0));
+      save();
+    });
+    handle.addEventListener('dblclick', event => {
+      event.stopPropagation();
+      preview.style.width = '360px';
+      preview.style.height = '210px';
+      this.fitPreviewToViewport();
+      save();
+    });
+    window.addEventListener('resize', () => { if (this.isPreviewOpen) this.fitPreviewToViewport(); });
   }
 
   private setupPreviewDragging(): void {

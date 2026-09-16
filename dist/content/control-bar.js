@@ -349,80 +349,6 @@ svg {
   display: none !important;
 }
 
-/* Smooth Minimizing & Expanding Transitions */
-.bar-container.elastic-minimizing {
-  animation: elasticSnapToPill 0.3s cubic-bezier(0.25, 1, 0.5, 1) forwards !important;
-  pointer-events: none !important;
-}
-
-@keyframes elasticSnapToPill {
-  0% {
-    transform: translateX(-50%) scale(1);
-    opacity: 1;
-    border-radius: 20px;
-    border-radius: 9999px;
-  }
-  50% {
-    transform: translateX(-80%) scaleX(0.7) scaleY(1.05);
-    opacity: 0.85;
-    border-radius: 28px;
-    border-radius: 9999px;
-  }
-  100% {
-    transform: translateX(-140%) scale(0.25);
-    opacity: 0;
-    border-radius: 50%;
-  }
-}
-
-@keyframes elasticPillBounceIn {
-  0% {
-    transform: scale(0.4) translateX(-20px);
-    opacity: 0;
-  }
-  65% {
-    transform: scale(1.12) translateX(2px);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1) translateX(0);
-    opacity: 1;
-  }
-}
-
-.floating-pill.elastic-burst {
-  animation: elasticPillBurst 0.1s cubic-bezier(0.25, 1, 0.5, 1) forwards;
-}
-
-@keyframes elasticPillBurst {
-  0% { transform: scale(1); opacity: 1; }
-  100% { transform: scale(1.22); opacity: 0; }
-}
-
-.bar-container.elastic-expanding {
-  animation: elasticBarExpand 0.36s cubic-bezier(0.18, 0.89, 0.32, 1.15) forwards !important;
-}
-
-@keyframes elasticBarExpand {
-  0% {
-    transform: translateX(-120%) scaleX(0.3) scaleY(0.7);
-    opacity: 0;
-    border-radius: 40px;
-    border-radius: 9999px;
-  }
-  60% {
-    transform: translateX(-48%) scaleX(1.03) scaleY(0.98);
-    opacity: 1;
-    border-radius: 22px;
-    border-radius: 9999px;
-  }
-  100% {
-    transform: translateX(-50%) scale(1);
-    border-radius: 20px;
-    border-radius: 9999px;
-  }
-}
-
 /* Circular Floating YouTube Pill (when minimized in bottom-left corner) */
 .floating-pill {
   position: fixed !important;
@@ -533,7 +459,18 @@ svg {
 
 :host(.pill-mode) .floating-pill {
   display: flex !important;
-  animation: elasticPillBounceIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: pillBounceIn 450ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes pillBounceIn {
+  0% { transform: scale(0.72); }
+  55% { transform: scale(1.16); }
+  78% { transform: scale(0.94); }
+  100% { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :host(.pill-mode) .floating-pill { animation: none; }
 }
 
 /* Left Section: Cover, Title, Channel & Like */
@@ -2711,6 +2648,33 @@ input:checked + .slider:before {
   .like-btn.pop-anim, .preview-like-btn.pop-anim, .like-btn.unlike-anim, .preview-like-btn.unlike-anim { animation: none; }
   .like-btn.pop-anim::after, .preview-like-btn.pop-anim::after { display: none; }
 }
+
+.preview-resize-handle {
+  position: absolute; right: 0; bottom: 0; width: 18px; height: 18px;
+  padding: 0; border: 0; background: #18181b; color: #fff;
+  font-size: 13px; line-height: 18px; cursor: nwse-resize; touch-action: none;
+  opacity: 0; pointer-events: none; z-index: 2;
+}
+.video-preview-window:hover .preview-resize-handle,
+.preview-resize-handle:focus-visible { opacity: 1; pointer-events: auto; }
+.preview-resize-handle:focus-visible { outline: 2px solid #5aa9ff; outline-offset: -2px; }
+.preview-bottom-meta { padding-right: 10px; }
+
+/* Both endpoints stay mounted while the dock extends/retracts like a tape. */
+:host(.tape-transition) .bar-container {
+  display: flex !important;
+  transition: none !important;
+  pointer-events: none !important;
+  will-change: translate, clip-path;
+}
+:host(.tape-transition) .floating-pill {
+  animation: none;
+  display: flex !important;
+  transform: none !important;
+  transition: none !important;
+  pointer-events: none !important;
+  z-index: 1;
+}
 `;
 
   // src/content/control-bar/ui.ts
@@ -3234,6 +3198,13 @@ input:checked + .slider:before {
         </div>
       </div>
     `;
+      const resizeHandle = document.createElement("button");
+      resizeHandle.className = "preview-resize-handle";
+      resizeHandle.type = "button";
+      resizeHandle.title = "Drag to resize \xB7 Arrow keys to adjust \xB7 Double-click to reset";
+      resizeHandle.setAttribute("aria-label", "Resize video preview");
+      resizeHandle.textContent = "\u25E2";
+      previewWindow.appendChild(resizeHandle);
       const searchBackdrop = document.createElement("div");
       searchBackdrop.className = "yt-search-backdrop";
       searchBackdrop.innerHTML = `
@@ -3374,6 +3345,48 @@ input:checked + .slider:before {
       } catch {
       }
     }
+    async animatePillMode(pill) {
+      if (this.isAnimatingPill || this.isPillMode === pill)
+        return;
+      this.isSettingsOpen = false;
+      this.settingsPopover.classList.remove("open");
+      this.isQueueOpen = false;
+      this.queuePanel.classList.remove("open");
+      this.isQualityOpen = false;
+      this.qualityPopover.classList.remove("open");
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        this.setPillMode(pill);
+        return;
+      }
+      this.isAnimatingPill = true;
+      this.hostElement.classList.add("tape-transition");
+      this.container.inert = true;
+      this.floatingPill.inert = true;
+      const bar = this.container.getBoundingClientRect();
+      const box = this.floatingPill.getBoundingClientRect();
+      const verticalInset = Math.max(0, (bar.height - box.height) / 2);
+      const expanded = { translate: "0px 0px", clipPath: "inset(0px 0px 0px 0px round 36px)" };
+      const retracted = {
+        translate: `${box.left - bar.left}px ${box.top - bar.top - verticalInset}px`,
+        clipPath: `inset(${verticalInset}px ${Math.max(0, bar.width - box.width)}px ${verticalInset}px 0px round 27px)`
+      };
+      const animation = this.container.animate(pill ? [expanded, retracted] : [retracted, expanded], {
+        duration: pill ? 520 : 620,
+        easing: pill ? "cubic-bezier(0.65, 0, 0.35, 1)" : "cubic-bezier(0.16, 1, 0.3, 1)",
+        fill: "both"
+      });
+      try {
+        await animation.finished;
+      } catch {
+      } finally {
+        this.setPillMode(pill);
+        animation.cancel();
+        this.hostElement.classList.remove("tape-transition");
+        this.container.inert = false;
+        this.floatingPill.inert = false;
+        this.isAnimatingPill = false;
+      }
+    }
     setTheme(theme) {
       this.currentTheme = theme;
       this.darkThemeBtn.classList.toggle("active", theme === "dark");
@@ -3457,22 +3470,10 @@ input:checked + .slider:before {
       });
     }
     attachEventListeners() {
-      this.floatingPill.addEventListener("click", (e) => {
-        if (e.target.closest(".pill-cut-btn"))
+      this.floatingPill.addEventListener("click", (event) => {
+        if (event.target.closest(".pill-cut-btn"))
           return;
-        if (this.isAnimatingPill)
-          return;
-        this.isAnimatingPill = true;
-        this.floatingPill.classList.add("elastic-burst");
-        setTimeout(() => {
-          this.floatingPill.classList.remove("elastic-burst");
-          this.setPillMode(false);
-          this.container.classList.add("elastic-expanding");
-          setTimeout(() => {
-            this.container.classList.remove("elastic-expanding");
-            this.isAnimatingPill = false;
-          }, 360);
-        }, 100);
+        void this.animatePillMode(false);
       });
       const pillCutBtn = this.floatingPill.querySelector(".pill-cut-btn");
       pillCutBtn?.addEventListener("click", (e) => {
@@ -3482,21 +3483,7 @@ input:checked + .slider:before {
         this.store.close();
       });
       this.hideBtn.addEventListener("click", () => {
-        if (this.isAnimatingPill)
-          return;
-        this.isAnimatingPill = true;
-        this.isSettingsOpen = false;
-        this.settingsPopover.classList.remove("open");
-        this.isQueueOpen = false;
-        this.queuePanel.classList.remove("open");
-        this.isQualityOpen = false;
-        this.qualityPopover.classList.remove("open");
-        this.container.classList.add("elastic-minimizing");
-        setTimeout(() => {
-          this.container.classList.remove("elastic-minimizing");
-          this.setPillMode(true);
-          this.isAnimatingPill = false;
-        }, 300);
+        void this.animatePillMode(true);
       });
       this.shuffleBtn.addEventListener("click", () => {
         this.isShuffleActive = !this.isShuffleActive;
@@ -3548,6 +3535,7 @@ input:checked + .slider:before {
         this.togglePreview();
       });
       this.setupPreviewDragging();
+      this.setupPreviewResizing();
       this.previewCloseBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         this.closePreview();
@@ -4098,12 +4086,107 @@ input:checked + .slider:before {
     togglePreview() {
       this.isPreviewOpen = !this.isPreviewOpen;
       this.videoPreviewWindow.classList.toggle("open", this.isPreviewOpen);
-      if (this.isPreviewOpen)
+      if (this.isPreviewOpen) {
+        this.fitPreviewToViewport();
         this.updateView();
+      }
     }
     closePreview() {
       this.isPreviewOpen = false;
       this.videoPreviewWindow.classList.remove("open");
+    }
+    fitPreviewToViewport() {
+      const preview = this.videoPreviewWindow;
+      const width = Math.min(parseFloat(preview.style.width) || 360, Math.max(1, window.innerWidth - 16));
+      const height = Math.min(parseFloat(preview.style.height) || 210, Math.max(1, window.innerHeight - 16));
+      preview.style.width = `${width}px`;
+      preview.style.height = `${height}px`;
+      const rect = preview.getBoundingClientRect();
+      preview.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))}px`;
+      preview.style.top = `${Math.max(8, Math.min(rect.top, window.innerHeight - height - 8))}px`;
+      preview.style.right = "auto";
+      preview.style.bottom = "auto";
+    }
+    setupPreviewResizing() {
+      const preview = this.videoPreviewWindow;
+      const handle = preview.querySelector(".preview-resize-handle");
+      let start = null;
+      try {
+        const size = JSON.parse(localStorage.getItem("yt_preview_size") || "null");
+        if (Number.isFinite(size?.width) && Number.isFinite(size?.height)) {
+          preview.style.width = `${Math.max(320, size.width)}px`;
+          preview.style.height = `${Math.max(180, size.height)}px`;
+        }
+      } catch {
+      }
+      const save = () => {
+        try {
+          const rect = preview.getBoundingClientRect();
+          localStorage.setItem("yt_preview_size", JSON.stringify({ width: rect.width, height: rect.height }));
+          localStorage.setItem("yt_preview_x", String(rect.left));
+          localStorage.setItem("yt_preview_y", String(rect.top));
+        } catch {
+        }
+      };
+      const resize = (width, height) => {
+        preview.style.width = `${Math.max(1, Math.min(Math.max(320, width), window.innerWidth - 16))}px`;
+        preview.style.height = `${Math.max(1, Math.min(Math.max(180, height), window.innerHeight - 16))}px`;
+        this.fitPreviewToViewport();
+      };
+      handle.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0)
+          return;
+        event.preventDefault();
+        event.stopPropagation();
+        this.fitPreviewToViewport();
+        const rect = preview.getBoundingClientRect();
+        start = { x: event.clientX, y: event.clientY, width: rect.width, height: rect.height, pointerId: event.pointerId };
+        handle.setPointerCapture(event.pointerId);
+      });
+      handle.addEventListener("pointermove", (event) => {
+        if (!start || event.pointerId !== start.pointerId)
+          return;
+        resize(start.width + event.clientX - start.x, start.height + event.clientY - start.y);
+      });
+      const finish = () => {
+        if (start) {
+          start = null;
+          save();
+        }
+      };
+      handle.addEventListener("pointerup", (event) => {
+        if (!start || event.pointerId !== start.pointerId)
+          return;
+        finish();
+        if (handle.hasPointerCapture(event.pointerId))
+          handle.releasePointerCapture(event.pointerId);
+      });
+      handle.addEventListener("pointercancel", finish);
+      handle.addEventListener("lostpointercapture", finish);
+      handle.addEventListener("keydown", (event) => {
+        if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key))
+          return;
+        event.preventDefault();
+        event.stopPropagation();
+        const rect = preview.getBoundingClientRect();
+        const step = event.shiftKey ? 40 : 10;
+        resize(
+          rect.width + (event.key === "ArrowRight" ? step : event.key === "ArrowLeft" ? -step : 0),
+          rect.height + (event.key === "ArrowDown" ? step : event.key === "ArrowUp" ? -step : 0)
+        );
+        save();
+      });
+      handle.addEventListener("dblclick", (event) => {
+        event.stopPropagation();
+        preview.style.width = "360px";
+        preview.style.height = "210px";
+        this.fitPreviewToViewport();
+        save();
+      });
+      window.addEventListener("resize", () => {
+        if (this.isPreviewOpen)
+          this.fitPreviewToViewport();
+      });
     }
     setupPreviewDragging() {
       let isDragging = false;

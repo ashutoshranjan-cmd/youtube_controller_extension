@@ -193,80 +193,6 @@ svg {
   display: none !important;
 }
 
-/* Smooth Minimizing & Expanding Transitions */
-.bar-container.elastic-minimizing {
-  animation: elasticSnapToPill 0.3s cubic-bezier(0.25, 1, 0.5, 1) forwards !important;
-  pointer-events: none !important;
-}
-
-@keyframes elasticSnapToPill {
-  0% {
-    transform: translateX(-50%) scale(1);
-    opacity: 1;
-    border-radius: 20px;
-    border-radius: 9999px;
-  }
-  50% {
-    transform: translateX(-80%) scaleX(0.7) scaleY(1.05);
-    opacity: 0.85;
-    border-radius: 28px;
-    border-radius: 9999px;
-  }
-  100% {
-    transform: translateX(-140%) scale(0.25);
-    opacity: 0;
-    border-radius: 50%;
-  }
-}
-
-@keyframes elasticPillBounceIn {
-  0% {
-    transform: scale(0.4) translateX(-20px);
-    opacity: 0;
-  }
-  65% {
-    transform: scale(1.12) translateX(2px);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1) translateX(0);
-    opacity: 1;
-  }
-}
-
-.floating-pill.elastic-burst {
-  animation: elasticPillBurst 0.1s cubic-bezier(0.25, 1, 0.5, 1) forwards;
-}
-
-@keyframes elasticPillBurst {
-  0% { transform: scale(1); opacity: 1; }
-  100% { transform: scale(1.22); opacity: 0; }
-}
-
-.bar-container.elastic-expanding {
-  animation: elasticBarExpand 0.36s cubic-bezier(0.18, 0.89, 0.32, 1.15) forwards !important;
-}
-
-@keyframes elasticBarExpand {
-  0% {
-    transform: translateX(-120%) scaleX(0.3) scaleY(0.7);
-    opacity: 0;
-    border-radius: 40px;
-    border-radius: 9999px;
-  }
-  60% {
-    transform: translateX(-48%) scaleX(1.03) scaleY(0.98);
-    opacity: 1;
-    border-radius: 22px;
-    border-radius: 9999px;
-  }
-  100% {
-    transform: translateX(-50%) scale(1);
-    border-radius: 20px;
-    border-radius: 9999px;
-  }
-}
-
 /* Circular Floating YouTube Pill (when minimized in bottom-left corner) */
 .floating-pill {
   position: fixed !important;
@@ -377,7 +303,18 @@ svg {
 
 :host(.pill-mode) .floating-pill {
   display: flex !important;
-  animation: elasticPillBounceIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: pillBounceIn 450ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes pillBounceIn {
+  0% { transform: scale(0.72); }
+  55% { transform: scale(1.16); }
+  78% { transform: scale(0.94); }
+  100% { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :host(.pill-mode) .floating-pill { animation: none; }
 }
 
 /* Left Section: Cover, Title, Channel & Like */
@@ -2554,5 +2491,32 @@ input:checked + .slider:before {
 @media (prefers-reduced-motion: reduce) {
   .like-btn.pop-anim, .preview-like-btn.pop-anim, .like-btn.unlike-anim, .preview-like-btn.unlike-anim { animation: none; }
   .like-btn.pop-anim::after, .preview-like-btn.pop-anim::after { display: none; }
+}
+
+.preview-resize-handle {
+  position: absolute; right: 0; bottom: 0; width: 18px; height: 18px;
+  padding: 0; border: 0; background: #18181b; color: #fff;
+  font-size: 13px; line-height: 18px; cursor: nwse-resize; touch-action: none;
+  opacity: 0; pointer-events: none; z-index: 2;
+}
+.video-preview-window:hover .preview-resize-handle,
+.preview-resize-handle:focus-visible { opacity: 1; pointer-events: auto; }
+.preview-resize-handle:focus-visible { outline: 2px solid #5aa9ff; outline-offset: -2px; }
+.preview-bottom-meta { padding-right: 10px; }
+
+/* Both endpoints stay mounted while the dock extends/retracts like a tape. */
+:host(.tape-transition) .bar-container {
+  display: flex !important;
+  transition: none !important;
+  pointer-events: none !important;
+  will-change: translate, clip-path;
+}
+:host(.tape-transition) .floating-pill {
+  animation: none;
+  display: flex !important;
+  transform: none !important;
+  transition: none !important;
+  pointer-events: none !important;
+  z-index: 1;
 }
 `;
