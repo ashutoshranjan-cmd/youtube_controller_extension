@@ -60,7 +60,6 @@ export class ControlBarUI {
   private previewVolSlider!: HTMLInputElement;
   private previewOpenYt!: HTMLElement;
   private previewToggleBtn!: HTMLButtonElement;
-  private previewControlsTimer: any = null;
   private isPreviewOpen = false;
   private isPreviewDragging = false;
 
@@ -493,7 +492,7 @@ export class ControlBarUI {
                 <svg class="prev-thumb-outline" viewBox="0 0 24 24"><path d="M18.77 11h-4.23l1.52-4.94C16.38 5.03 15.54 4 14.38 4c-.58 0-1.14.24-1.52.65L7 11H3v10h4l1 1h11c1.1 0 2-.9 2-2l1-7c.1-.8-.45-1.5-1.23-1.8zM7 20H4v-8h3v8zm13.1-6.84l-.9 6.34c-.05.3-.3.5-.6.5H8.5V11.6l5.2-5.45c.1-.1.2-.15.3-.15.2 0 .4.1.5.25.1.15.1.35.05.5L13.05 12h7.05c.4 0 .7.3.8.7.05.15.05.3 0 .46z"/></svg>
                 <svg class="prev-thumb-filled" viewBox="0 0 24 24" style="display:none;fill:#ff0033;"><path d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z"/></svg>
               </button>
-              <button class="preview-icon-action-btn preview-fullscreen-btn" title="Open YouTube in new tab">
+              <button class="preview-icon-action-btn preview-fullscreen-btn" title="Switch to playing YouTube tab">
                 <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
               </button>
               <button class="preview-close-btn" title="Close preview">
@@ -940,10 +939,7 @@ export class ControlBarUI {
 
     this.previewFullscreenBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const state = this.store.getState();
-      if (state && state.videoId) {
-        window.open(`https://www.youtube.com/watch?v=${state.videoId}`, '_blank');
-      }
+      this.sendCommand({ type: 'FOCUS_YOUTUBE_TAB' });
     });
 
     // Video Preview Transport Controls
@@ -985,31 +981,6 @@ export class ControlBarUI {
       this.sendCommand({ type: 'SET_VOLUME', payload: { volume: vol } });
     });
 
-    // Video Preview Controls Hover & Visibility
-    this.videoPreviewWindow.addEventListener('mousemove', () => {
-      this.showPreviewControls();
-    });
-
-    this.videoPreviewWindow.addEventListener('mouseenter', () => {
-      this.showPreviewControls();
-    });
-
-    this.videoPreviewWindow.addEventListener('mouseleave', () => {
-      if (this.previewControlsTimer) {
-        clearTimeout(this.previewControlsTimer);
-        this.previewControlsTimer = null;
-      }
-      const state = this.store.getState();
-      if (state && state.isPlaying) {
-        if (this.previewControlsTimer) {
-          clearTimeout(this.previewControlsTimer);
-          this.previewControlsTimer = null;
-        }
-        this.videoPreviewWindow.classList.remove('show-controls');
-      }
-      this.videoPreviewWindow.classList.remove('show-controls');
-    });
-
     this.previewProgressTrack.addEventListener('click', (e: MouseEvent) => {
       e.stopPropagation();
       const rect = this.previewProgressTrack.getBoundingClientRect();
@@ -1020,10 +991,7 @@ export class ControlBarUI {
 
     this.previewOpenYt.addEventListener('click', (e) => {
       e.stopPropagation();
-      const state = this.store.getState();
-      if (state && state.videoId) {
-        window.open(`https://www.youtube.com/watch?v=${state.videoId}`, '_blank');
-      }
+      this.sendCommand({ type: 'FOCUS_YOUTUBE_TAB' });
     });
 
     // Search Modal Event Listeners
@@ -1436,8 +1404,7 @@ export class ControlBarUI {
       this.prevSpeakerIcon.style.display = state.isMuted || vol === 0 ? 'none' : 'block';
       this.prevMutedIcon.style.display = state.isMuted || vol === 0 ? 'block' : 'none';
 
-      // Keep controls visible when paused
-      this.videoPreviewWindow.classList.toggle('paused', !state.isPlaying);
+
     }
 
     // Queue updates
@@ -1609,42 +1576,12 @@ export class ControlBarUI {
   private togglePreview(): void {
     this.isPreviewOpen = !this.isPreviewOpen;
     this.videoPreviewWindow.classList.toggle('open', this.isPreviewOpen);
-    if (this.isPreviewOpen) {
-      this.showPreviewControls();
-      this.updateView();
-    } else {
-      if (this.previewControlsTimer) {
-        clearTimeout(this.previewControlsTimer);
-        this.previewControlsTimer = null;
-      }
-    }
+    if (this.isPreviewOpen) this.updateView();
   }
 
   private closePreview(): void {
     this.isPreviewOpen = false;
     this.videoPreviewWindow.classList.remove('open');
-    if (this.previewControlsTimer) {
-      clearTimeout(this.previewControlsTimer);
-      this.previewControlsTimer = null;
-    }
-  }
-
-  private showPreviewControls(): void {
-    this.videoPreviewWindow.classList.add('show-controls');
-    if (this.previewControlsTimer) {
-      clearTimeout(this.previewControlsTimer);
-    }
-    this.previewControlsTimer = null;
-    const state = this.store.getState();
-    // Only auto-hide if playing; if paused, controls stay visible
-    if (state && state.isPlaying) {
-      this.previewControlsTimer = setTimeout(() => {
-        if (!this.isPreviewDragging) {
-          this.videoPreviewWindow.classList.remove('show-controls');
-        }
-        this.previewControlsTimer = null;
-      }, 4000);
-    }
   }
 
   private setupPreviewDragging(): void {

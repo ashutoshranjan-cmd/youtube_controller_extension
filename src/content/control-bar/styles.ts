@@ -1518,8 +1518,7 @@ input:checked + .slider:before {
   display: block;
 }
 
-/* Controls Overlay: Auto-Vanishes by default; Appears initially and on hover */
-/* Controls Overlay: Always visible when paused or dragging; shows on hover/interaction */
+/* Preview controls appear only while the pointer is over the window. */
 .preview-controls-overlay {
   position: absolute;
   inset: 0;
@@ -1538,11 +1537,7 @@ input:checked + .slider:before {
   transition: opacity 0.22s ease;
 }
 
-.video-preview-window:hover .preview-controls-overlay,
-.video-preview-window:focus-within .preview-controls-overlay,
-.video-preview-window.show-controls .preview-controls-overlay,
-.video-preview-window.paused .preview-controls-overlay,
-.video-preview-window.is-dragging .preview-controls-overlay {
+.video-preview-window:hover .preview-controls-overlay {
   opacity: 1;
   pointer-events: auto;
 }

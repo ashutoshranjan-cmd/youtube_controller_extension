@@ -76,6 +76,7 @@ export type ExtensionCommandType =
   | 'GET_QUALITY'
   | 'SEARCH_YOUTUBE'
   | 'PLAY_QUEUE_ITEM'
+  | 'FOCUS_YOUTUBE_TAB'
   | 'SELECT_TARGET_TAB'
   | 'GET_STATE'
   | 'GET_TABS'

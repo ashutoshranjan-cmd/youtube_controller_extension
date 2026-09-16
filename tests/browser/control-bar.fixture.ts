@@ -48,6 +48,13 @@ check(el('.search-results-list').textContent!.includes('Retry search'),'Retry mi
 el('.search-cut-btn').click();
 check(root.activeElement===el('.search-btn'),'Search focus not restored');
 el('.preview-toggle-btn').click();
+const beforeFocus = calls.length;
+el('.preview-fullscreen-btn').click();
+el('.preview-open-yt').click();
+check(calls.length === beforeFocus + 2 && calls.slice(beforeFocus).every(call => call.type === 'FOCUS_YOUTUBE_TAB'), 'Preview links must focus the existing YouTube tab');
+store.update({...state, isPlaying: false}, []);
+check(getComputedStyle(el('.preview-controls-overlay')).opacity === '0', 'Paused preview controls visible without hover');
+store.update(state, []);
 const beforePrevious = calls.length;
 el('.preview-prev-track').click();
 check(calls.length === beforePrevious + 1 && calls.at(-1).type === 'PREVIOUS', 'Previous command duplicated or incorrect');

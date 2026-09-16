@@ -414,6 +414,18 @@ chrome.runtime.onMessage.addListener((
   // 6. Playback commands targeted at the active YouTube tab
   const targetTabId = tabManager.getTargetTabId();
 
+  if (type === 'FOCUS_YOUTUBE_TAB') {
+    if (targetTabId == null) {
+      sendResponse({ success: false, error: 'No active YouTube tab found' });
+      return true;
+    }
+    chrome.tabs.update(targetTabId, { active: true })
+      .then(tab => chrome.windows.update(tab.windowId, { focused: true }))
+      .then(() => sendResponse({ success: true }))
+      .catch(error => sendResponse({ success: false, error: error?.message || 'Unable to switch to YouTube' }));
+    return true;
+  }
+
   // If command is to play a queue item / searched video and no YouTube tab is currently open:
   if (type === 'PLAY_QUEUE_ITEM' && payload?.url) {
     if (!targetTabId) {
