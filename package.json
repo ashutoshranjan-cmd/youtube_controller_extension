@@ -1,0 +1,26 @@
+{
+  "name": "youtube-global-control-bar",
+  "version": "1.0.0",
+  "description": "Production-ready Chrome Extension (Manifest V3) for controlling YouTube playback from any normal webpage without tab switching.",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "test": "node --test dist/tests/*.js",
+    "test:browser": "node scripts/test-browser.mjs"
+  },
+  "keywords": [
+    "chrome-extension",
+    "manifest-v3",
+    "youtube-controller",
+    "media-controls"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/chrome": "^0.0.260",
+    "@types/node": "^20.11.0",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.3.3"
+  }
+}

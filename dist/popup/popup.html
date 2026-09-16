@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube Controller</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header with Official YouTube Logo -->
+    <header class="header">
+      <div class="brand">
+        <svg class="yt-logo" viewBox="0 0 28 20">
+          <path fill="#FF0000" d="M27.973 3.123A3.504 3.504 0 0 0 25.5.651C23.32 0 14 0 14 0S4.68 0 2.5.651A3.504 3.504 0 0 0 .027 3.123C0 5.3 0 10 0 10s0 4.7.027 6.877A3.504 3.504 0 0 0 2.5 19.349C4.68 20 14 20 14 20s9.32 0 11.5-.651a3.504 3.504 0 0 0 2.473-2.472C28 14.7 28 10 28 10s0-4.7-.027-6.877z"/>
+          <polygon fill="#FFFFFF" points="11.2,14.4 18.2,10 11.2,5.6"/>
+        </svg>
+        <span class="brand-name">YouTube Controller</span>
+      </div>
+      <div class="tab-badge" id="tabCount">0 tabs</div>
+    </header>
+
+    <!-- Card 1: Bottom Control Bar Switch (matching reference image) -->
+    <div class="settings-card">
+      <div class="card-left">
+        <span class="card-icon">🖥</span>
+        <div class="card-text">
+          <span class="card-title">Bottom Control Bar</span>
+          <span class="card-sub" id="barStatusText">Always show player controls</span>
+        </div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="barToggle" checked />
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <!-- Card 2: Keyboard Shortcuts -->
+    <div class="settings-card clickable-card">
+      <div class="card-left">
+        <span class="card-icon">⌨</span>
+        <div class="card-text">
+          <span class="card-title">Keyboard Shortcuts</span>
+          <span class="card-sub">Space: Play/Pause • J/L: ±10s • M: Mute</span>
+        </div>
+      </div>
+      <span class="card-chevron">›</span>
+    </div>
+
+    <!-- Card 3: Appearance -->
+    <div class="settings-card clickable-card">
+      <div class="card-left">
+        <span class="card-icon">🖵</span>
+        <div class="card-text">
+          <span class="card-title">Appearance</span>
+          <span class="card-sub">Floating Dock • Dark / Light Theme</span>
+          <span class="card-sub">Floating Dock • Dark & Light Themes</span>
+        </div>
+      </div>
+      <span class="card-chevron">›</span>
+    </div>
+
+    <!-- Tab Selector (if multiple tabs) -->
+    <div class="tab-select-section" id="tabSelectSection" style="display:none;">
+      <label for="tabSelect">Active Player:</label>
+      <select id="tabSelect"></select>
+    </div>
+
+    <!-- Media Card -->
+    <div class="media-card" id="mediaCard">
+      <div class="thumb-container">
+        <img id="popupThumb" alt="Thumbnail" />
+      </div>
+      <div class="media-meta">
+        <div class="video-title" id="popupTitle">No YouTube tab open</div>
+        <div class="channel-name" id="popupChannel">Open YouTube to start controlling</div>
+      </div>
+    </div>
+
+    <!-- Seek Bar & Timestamps -->
+    <div class="progress-section" id="progressSection">
+      <input type="range" id="popupSeek" min="0" max="100" value="0" />
+      <div class="time-display">
+        <span id="popupCurrentTime">0:00</span>
+        <span id="popupDuration">0:00</span>
+      </div>
+    </div>
+
+    <!-- Playback Controls Row -->
+    <div class="controls-row">
+      <button class="btn" id="popupPrev" title="Previous">⏮</button>
+      <button class="btn" id="popupSkipBack" title="Rewind 10s">⏪</button>
+      <button class="btn btn-primary" id="popupPlayPause" title="Play / Pause">▶</button>
+      <button class="btn" id="popupSkipFwd" title="Forward 10s">⏩</button>
+      <button class="btn" id="popupNext" title="Next">⏭</button>
+      <button class="btn" id="popupMute" title="Mute">🔊</button>
+      <input type="range" id="popupVolume" min="0" max="100" value="100" title="Volume" />
+    </div>
+
+    <!-- Footer matching reference -->
+    <footer class="footer">
+      <span>Made with ❤️ for a better YouTube experience</span>
+    </footer>
+  </div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

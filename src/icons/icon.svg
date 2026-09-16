@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="ytGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF2E4C" />
+      <stop offset="100%" stop-color="#D90028" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity="0.35" />
+    </filter>
+  </defs>
+  <!-- Background Badge -->
+  <rect x="8" y="18" width="112" height="92" rx="26" fill="url(#ytGrad)" filter="url(#shadow)" />
+  <!-- Gloss Accent -->
+  <path d="M 34 18 L 94 18 C 108 18 120 30 120 44 C 120 54 100 64 64 64 C 28 64 8 54 8 44 C 8 30 20 18 34 18 Z" fill="rgba(255, 255, 255, 0.15)" />
+  <!-- White Play Button -->
+  <polygon points="52,42 86,64 52,86" fill="#FFFFFF" />
+  <!-- Media bar dot accents -->
+  <circle cx="44" cy="96" r="3.5" fill="rgba(255,255,255,0.7)" />
+  <circle cx="64" cy="96" r="3.5" fill="rgba(255,255,255,0.9)" />
+  <circle cx="84" cy="96" r="3.5" fill="rgba(255,255,255,0.7)" />
+</svg>
+
