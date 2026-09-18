@@ -1611,6 +1611,31 @@ input:checked + .slider:before {
   display: block;
 }
 
+.preview-video-frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  outline: none;
+  display: block;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.preview-hit-shield {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  pointer-events: auto;
+  background: transparent;
+  cursor: pointer;
+}
+
 /* Preview controls appear only while the pointer is over the window. */
 .preview-controls-overlay {
   position: absolute;
@@ -1628,9 +1653,13 @@ input:checked + .slider:before {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.22s ease;
+  z-index: 10;
 }
 
 .video-preview-window:hover .preview-controls-overlay {
+.video-preview-window:hover .preview-controls-overlay,
+.video-preview-window:focus-within .preview-controls-overlay,
+.video-preview-window.is-hovered .preview-controls-overlay {
   opacity: 1;
   pointer-events: auto;
 }
@@ -2654,11 +2683,29 @@ input:checked + .slider:before {
   padding: 0; border: 0; background: #18181b; color: #fff;
   font-size: 13px; line-height: 18px; cursor: nwse-resize; touch-action: none;
   opacity: 0; pointer-events: none; z-index: 2;
+  position: absolute; right: 0; bottom: 0; width: 20px; height: 20px;
+  padding: 0; border: 0; background: rgba(24, 24, 27, 0.95); color: #fff;
+  font-size: 13px; line-height: 20px; text-align: center; cursor: nwse-resize; touch-action: none;
+  opacity: 0; pointer-events: none; z-index: 30; border-top-left-radius: 4px;
+  transition: opacity 0.2s ease, background 0.15s ease;
 }
 .video-preview-window:hover .preview-resize-handle,
+.video-preview-window:focus-within .preview-resize-handle,
+.video-preview-window.is-hovered .preview-resize-handle,
+.video-preview-window.is-resizing .preview-resize-handle,
 .preview-resize-handle:focus-visible { opacity: 1; pointer-events: auto; }
 .preview-resize-handle:focus-visible { outline: 2px solid #5aa9ff; outline-offset: -2px; }
 .preview-bottom-meta { padding-right: 10px; }
+.preview-resize-handle:hover { background: #ff0033; color: #fff; }
+.video-preview-window.is-resizing {
+  user-select: none !important;
+  cursor: nwse-resize !important;
+}
+.video-preview-window.is-resizing .preview-controls-overlay {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+.preview-bottom-meta { padding-right: 14px; }
 
 /* Both endpoints stay mounted while the dock extends/retracts like a tape. */
 :host(.tape-transition) .bar-container {
@@ -2705,6 +2752,9 @@ input:checked + .slider:before {
     videoPreviewWindow;
     previewTopBar;
     previewThumbImg;
+    previewVideoFrame;
+    currentPreviewVideoId = null;
+    lastPreviewPlayingState = null;
     previewTitleText;
     previewLikeBtn;
     prevThumbOutlineIcon;
@@ -2729,6 +2779,8 @@ input:checked + .slider:before {
     previewToggleBtn;
     isPreviewOpen = false;
     isPreviewDragging = false;
+    isPreviewResizing = false;
+    previewControlsHideTimer = null;
     // Search Modal Elements
     searchBtn;
     searchBackdrop;
@@ -3131,6 +3183,8 @@ input:checked + .slider:before {
       previewWindow.innerHTML = `
       <div class="preview-media-wrap">
         <img class="preview-thumb-img" alt="Video Preview" />
+        <iframe class="preview-video-frame" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen title="YouTube Video Preview"></iframe>
+        <div class="preview-hit-shield"></div>
         <div class="preview-controls-overlay">
           <div class="preview-top-bar" title="Drag to move preview">
             <div class="preview-brand">
@@ -3270,6 +3324,16 @@ input:checked + .slider:before {
       this.videoPreviewWindow = previewWindow;
       this.previewTopBar = previewWindow.querySelector(".preview-top-bar");
       this.previewThumbImg = previewWindow.querySelector(".preview-thumb-img");
+      this.previewVideoFrame = previewWindow.querySelector(".preview-video-frame");
+      this.previewVideoFrame.addEventListener("load", () => {
+        this.sendIframeCommand("mute");
+        const state = this.store.getState();
+        if (state && state.isPlaying) {
+          this.sendIframeCommand("playVideo");
+        } else {
+          this.sendIframeCommand("pauseVideo");
+        }
+      });
       this.previewTitleText = previewWindow.querySelector(".preview-title-text");
       this.previewLikeBtn = previewWindow.querySelector(".preview-like-btn");
       this.prevThumbOutlineIcon = previewWindow.querySelector(".prev-thumb-outline");
@@ -3559,10 +3623,20 @@ input:checked + .slider:before {
       this.previewSkipBackBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         this.sendCommand({ type: "SEEK_RELATIVE", payload: { delta: -10 } });
+        const state = this.store.getState();
+        if (state) {
+          const targetTime = Math.max(0, state.currentTime - 10);
+          this.sendIframeCommand("seekTo", [targetTime, true]);
+        }
       });
       this.previewSkipFwdBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         this.sendCommand({ type: "SEEK_RELATIVE", payload: { delta: 10 } });
+        const state = this.store.getState();
+        if (state) {
+          const targetTime = Math.min(state.duration || 0, state.currentTime + 10);
+          this.sendIframeCommand("seekTo", [targetTime, true]);
+        }
       });
       this.previewNextBtn.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -3582,7 +3656,9 @@ input:checked + .slider:before {
         const rect = this.previewProgressTrack.getBoundingClientRect();
         const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
         const duration = this.store.getState()?.duration || 0;
-        this.sendCommand({ type: "SEEK", payload: { time: ratio * duration } });
+        const targetTime = ratio * duration;
+        this.sendCommand({ type: "SEEK", payload: { time: targetTime } });
+        this.sendIframeCommand("seekTo", [targetTime, true]);
       });
       this.previewOpenYt.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -3832,6 +3908,7 @@ input:checked + .slider:before {
         this.floatingPill.classList.remove("playing");
       }
       if (!state) {
+        this.stopPreviewVideo();
         this.renderQueue([], false);
         if (tabs.length === 0) {
           this.titleEl.textContent = "YouTube Controller";
@@ -3913,6 +3990,7 @@ input:checked + .slider:before {
         if (state.thumbnailUrl && this.previewThumbImg.src !== state.thumbnailUrl) {
           this.previewThumbImg.src = state.thumbnailUrl;
         }
+        this.syncPreviewVideo(false);
         this.previewPlayIcon.style.display = state.isPlaying ? "none" : "block";
         this.previewPauseIcon.style.display = state.isPlaying ? "block" : "none";
         const progressRatio = this.store.getCurrentProgressRatio();
@@ -4088,12 +4166,76 @@ input:checked + .slider:before {
       this.videoPreviewWindow.classList.toggle("open", this.isPreviewOpen);
       if (this.isPreviewOpen) {
         this.fitPreviewToViewport();
+        this.syncPreviewVideo(true);
         this.updateView();
+      } else {
+        this.stopPreviewVideo();
       }
     }
     closePreview() {
       this.isPreviewOpen = false;
       this.videoPreviewWindow.classList.remove("open");
+      if (this.previewControlsHideTimer) {
+        clearTimeout(this.previewControlsHideTimer);
+        this.previewControlsHideTimer = null;
+      }
+      this.videoPreviewWindow.classList.remove("is-hovered");
+      this.stopPreviewVideo();
+    }
+    showPreviewControls(autoHide = true) {
+      this.videoPreviewWindow.classList.add("is-hovered");
+      if (this.previewControlsHideTimer)
+        clearTimeout(this.previewControlsHideTimer);
+      if (autoHide) {
+        this.previewControlsHideTimer = setTimeout(() => {
+          const state = this.store.getState();
+          if (state && state.isPlaying && !this.isPreviewDragging && !this.isPreviewResizing) {
+            this.videoPreviewWindow.classList.remove("is-hovered");
+          }
+        }, 3500);
+      }
+    }
+    syncPreviewVideo(forceReload = false) {
+      const state = this.store.getState();
+      if (!state || !state.videoId) {
+        this.stopPreviewVideo();
+        return;
+      }
+      if (!this.isPreviewOpen) {
+        return;
+      }
+      const videoId = state.videoId;
+      if (this.currentPreviewVideoId !== videoId || forceReload) {
+        this.currentPreviewVideoId = videoId;
+        this.lastPreviewPlayingState = state.isPlaying;
+        const startSeconds = Math.max(0, Math.floor(state.currentTime || 0));
+        const autoplay = state.isPlaying ? 1 : 0;
+        this.previewVideoFrame.src = `https://www.youtube.com/embed/${videoId}?autoplay=${autoplay}&mute=1&controls=0&playsinline=1&enablejsapi=1&rel=0&start=${startSeconds}`;
+        return;
+      }
+      if (this.lastPreviewPlayingState !== state.isPlaying) {
+        this.lastPreviewPlayingState = state.isPlaying;
+        this.sendIframeCommand(state.isPlaying ? "playVideo" : "pauseVideo");
+      }
+    }
+    stopPreviewVideo() {
+      if (this.previewVideoFrame && this.currentPreviewVideoId) {
+        this.sendIframeCommand("pauseVideo");
+        this.previewVideoFrame.src = "about:blank";
+        this.currentPreviewVideoId = null;
+        this.lastPreviewPlayingState = null;
+      }
+    }
+    sendIframeCommand(func, args = []) {
+      try {
+        if (this.previewVideoFrame && this.previewVideoFrame.contentWindow) {
+          this.previewVideoFrame.contentWindow.postMessage(
+            JSON.stringify({ event: "command", func, args }),
+            "*"
+          );
+        }
+      } catch {
+      }
     }
     fitPreviewToViewport() {
       const preview = this.videoPreviewWindow;
@@ -4133,33 +4275,47 @@ input:checked + .slider:before {
         preview.style.height = `${Math.max(1, Math.min(Math.max(180, height), window.innerHeight - 16))}px`;
         this.fitPreviewToViewport();
       };
+      const onMove = (event) => {
+        if (!start)
+          return;
+        resize(start.width + event.clientX - start.x, start.height + event.clientY - start.y);
+      };
+      const finish = () => {
+        if (start) {
+          start = null;
+          this.isPreviewResizing = false;
+          preview.classList.remove("is-resizing");
+          save();
+          window.removeEventListener("pointermove", onMove);
+          window.removeEventListener("pointerup", finish);
+        }
+      };
       handle.addEventListener("pointerdown", (event) => {
         if (event.button !== 0)
           return;
         event.preventDefault();
         event.stopPropagation();
+        this.isPreviewResizing = true;
+        preview.classList.add("is-resizing");
         this.fitPreviewToViewport();
         const rect = preview.getBoundingClientRect();
         start = { x: event.clientX, y: event.clientY, width: rect.width, height: rect.height, pointerId: event.pointerId };
-        handle.setPointerCapture(event.pointerId);
-      });
-      handle.addEventListener("pointermove", (event) => {
-        if (!start || event.pointerId !== start.pointerId)
-          return;
-        resize(start.width + event.clientX - start.x, start.height + event.clientY - start.y);
-      });
-      const finish = () => {
-        if (start) {
-          start = null;
-          save();
+        try {
+          handle.setPointerCapture(event.pointerId);
+        } catch {
         }
-      };
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", finish);
+      });
       handle.addEventListener("pointerup", (event) => {
         if (!start || event.pointerId !== start.pointerId)
           return;
         finish();
-        if (handle.hasPointerCapture(event.pointerId))
-          handle.releasePointerCapture(event.pointerId);
+        try {
+          if (handle.hasPointerCapture(event.pointerId))
+            handle.releasePointerCapture(event.pointerId);
+        } catch {
+        }
       });
       handle.addEventListener("pointercancel", finish);
       handle.addEventListener("lostpointercapture", finish);
@@ -4190,10 +4346,20 @@ input:checked + .slider:before {
     }
     setupPreviewDragging() {
       let isDragging = false;
+      let dragMoved = false;
       let startX = 0;
       let startY = 0;
       let initialLeft = 0;
       let initialTop = 0;
+      this.videoPreviewWindow.addEventListener("pointerenter", () => this.showPreviewControls(true));
+      this.videoPreviewWindow.addEventListener("pointermove", () => this.showPreviewControls(true));
+      this.videoPreviewWindow.addEventListener("pointerleave", () => {
+        if (this.isPreviewDragging || this.isPreviewResizing)
+          return;
+        if (this.previewControlsHideTimer)
+          clearTimeout(this.previewControlsHideTimer);
+        this.videoPreviewWindow.classList.remove("is-hovered");
+      });
       try {
         const savedX = localStorage.getItem("yt_preview_x");
         const savedY = localStorage.getItem("yt_preview_y");
@@ -4215,10 +4381,11 @@ input:checked + .slider:before {
       }
       const onPointerDown = (e) => {
         const target = e.composedPath ? e.composedPath()[0] : e.target;
-        if (target && (target.tagName === "BUTTON" || target.closest("button") || target.tagName === "INPUT" || target.closest(".preview-progress-track") || target.closest(".preview-open-yt") || target.classList.contains("preview-vol-slider"))) {
+        if (target && (target.tagName === "BUTTON" || target.closest("button") || target.tagName === "INPUT" || target.closest(".preview-progress-track") || target.closest(".preview-open-yt") || target.classList.contains("preview-vol-slider") || target.classList.contains("preview-vol-slider") || target.classList.contains("preview-resize-handle") || target.closest(".preview-resize-handle"))) {
           return;
         }
         isDragging = true;
+        dragMoved = false;
         this.isPreviewDragging = true;
         this.videoPreviewWindow.classList.add("is-dragging");
         const rect = this.videoPreviewWindow.getBoundingClientRect();
@@ -4236,6 +4403,9 @@ input:checked + .slider:before {
       const onPointerMove = (e) => {
         if (!isDragging)
           return;
+        if (Math.abs(e.clientX - startX) > 4 || Math.abs(e.clientY - startY) > 4) {
+          dragMoved = true;
+        }
         const deltaX = e.clientX - startX;
         const deltaY = e.clientY - startY;
         const width = this.videoPreviewWindow.offsetWidth || 360;
@@ -4253,6 +4423,10 @@ input:checked + .slider:before {
         isDragging = false;
         this.isPreviewDragging = false;
         this.videoPreviewWindow.classList.remove("is-dragging");
+        if (!dragMoved) {
+          this.showPreviewControls(true);
+          this.sendCommand({ type: "TOGGLE_PLAY" });
+        }
         try {
           this.videoPreviewWindow.releasePointerCapture?.(e.pointerId);
         } catch {

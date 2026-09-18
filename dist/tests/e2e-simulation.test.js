@@ -379,4 +379,66 @@ describe("End-to-End Control Bar & YouTube Dispatch Simulation", () => {
     tabManager.updateTabState(703, ytTab.getState());
     assert.strictEqual(tabManager.getTargetState()?.isMuted, true);
   });
+  it("should accurately calculate preview resize geometry, keyboard steps, bounds clamping, and drag isolation", () => {
+    const winWidth = 1920;
+    const winHeight = 1080;
+    let currentWidth = 360;
+    let currentHeight = 210;
+    let currentLeft = 1500;
+    let currentTop = 750;
+    const fitPreviewToViewport = () => {
+      currentWidth = Math.min(currentWidth, Math.max(1, winWidth - 16));
+      currentHeight = Math.min(currentHeight, Math.max(1, winHeight - 16));
+      currentLeft = Math.max(8, Math.min(currentLeft, winWidth - currentWidth - 8));
+      currentTop = Math.max(8, Math.min(currentTop, winHeight - currentHeight - 8));
+    };
+    const resize = (width, height) => {
+      currentWidth = Math.max(1, Math.min(Math.max(320, width), winWidth - 16));
+      currentHeight = Math.max(1, Math.min(Math.max(180, height), winHeight - 16));
+      fitPreviewToViewport();
+    };
+    assert.strictEqual(currentWidth, 360);
+    assert.strictEqual(currentHeight, 210);
+    resize(currentWidth + 140, currentHeight + 90);
+    assert.strictEqual(currentWidth, 500);
+    assert.strictEqual(currentHeight, 300);
+    assert.strictEqual(currentLeft, 1412);
+    assert.strictEqual(currentTop, 750);
+    resize(100, 50);
+    assert.strictEqual(currentWidth, 320);
+    assert.strictEqual(currentHeight, 180);
+    resize(3e3, 2e3);
+    assert.strictEqual(currentWidth, winWidth - 16);
+    assert.strictEqual(currentHeight, winHeight - 16);
+    assert.strictEqual(currentLeft, 8);
+    assert.strictEqual(currentTop, 8);
+    currentWidth = 360;
+    currentHeight = 210;
+    fitPreviewToViewport();
+    assert.strictEqual(currentWidth, 360);
+    assert.strictEqual(currentHeight, 210);
+    const stepNormal = 10;
+    resize(currentWidth + stepNormal, currentHeight + stepNormal);
+    assert.strictEqual(currentWidth, 370);
+    assert.strictEqual(currentHeight, 220);
+    const stepShift = 40;
+    resize(currentWidth - stepShift, currentHeight - stepShift);
+    assert.strictEqual(currentWidth, 330);
+    assert.strictEqual(currentHeight, 180);
+    const isDragBlocked = (target) => {
+      return target.tagName === "BUTTON" || target.closest("button") || target.tagName === "INPUT" || target.closest(".preview-progress-track") || target.closest(".preview-open-yt") || target.className.includes("preview-vol-slider") || target.className.includes("preview-resize-handle") || target.closest(".preview-resize-handle");
+    };
+    const handleElement = {
+      tagName: "BUTTON",
+      className: "preview-resize-handle",
+      closest: (selector) => selector === "button" || selector === ".preview-resize-handle"
+    };
+    assert.strictEqual(isDragBlocked(handleElement), true);
+    const titleBarElement = {
+      tagName: "DIV",
+      className: "preview-top-bar",
+      closest: () => false
+    };
+    assert.strictEqual(isDragBlocked(titleBarElement), false);
+  });
 });

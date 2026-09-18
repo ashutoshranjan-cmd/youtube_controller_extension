@@ -1455,6 +1455,31 @@ input:checked + .slider:before {
   display: block;
 }
 
+.preview-video-frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  outline: none;
+  display: block;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.preview-hit-shield {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  pointer-events: auto;
+  background: transparent;
+  cursor: pointer;
+}
+
 /* Preview controls appear only while the pointer is over the window. */
 .preview-controls-overlay {
   position: absolute;
@@ -1472,9 +1497,13 @@ input:checked + .slider:before {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.22s ease;
+  z-index: 10;
 }
 
 .video-preview-window:hover .preview-controls-overlay {
+.video-preview-window:hover .preview-controls-overlay,
+.video-preview-window:focus-within .preview-controls-overlay,
+.video-preview-window.is-hovered .preview-controls-overlay {
   opacity: 1;
   pointer-events: auto;
 }
@@ -2498,11 +2527,29 @@ input:checked + .slider:before {
   padding: 0; border: 0; background: #18181b; color: #fff;
   font-size: 13px; line-height: 18px; cursor: nwse-resize; touch-action: none;
   opacity: 0; pointer-events: none; z-index: 2;
+  position: absolute; right: 0; bottom: 0; width: 20px; height: 20px;
+  padding: 0; border: 0; background: rgba(24, 24, 27, 0.95); color: #fff;
+  font-size: 13px; line-height: 20px; text-align: center; cursor: nwse-resize; touch-action: none;
+  opacity: 0; pointer-events: none; z-index: 30; border-top-left-radius: 4px;
+  transition: opacity 0.2s ease, background 0.15s ease;
 }
 .video-preview-window:hover .preview-resize-handle,
+.video-preview-window:focus-within .preview-resize-handle,
+.video-preview-window.is-hovered .preview-resize-handle,
+.video-preview-window.is-resizing .preview-resize-handle,
 .preview-resize-handle:focus-visible { opacity: 1; pointer-events: auto; }
 .preview-resize-handle:focus-visible { outline: 2px solid #5aa9ff; outline-offset: -2px; }
 .preview-bottom-meta { padding-right: 10px; }
+.preview-resize-handle:hover { background: #ff0033; color: #fff; }
+.video-preview-window.is-resizing {
+  user-select: none !important;
+  cursor: nwse-resize !important;
+}
+.video-preview-window.is-resizing .preview-controls-overlay {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+.preview-bottom-meta { padding-right: 14px; }
 
 /* Both endpoints stay mounted while the dock extends/retracts like a tape. */
 :host(.tape-transition) .bar-container {

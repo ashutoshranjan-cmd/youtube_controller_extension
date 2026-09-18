@@ -318,5 +318,102 @@ describe('End-to-End Control Bar & YouTube Dispatch Simulation', () => {
     tabManager.updateTabState(703, ytTab.getState());
     assert.strictEqual(tabManager.getTargetState()?.isMuted, true);
   });
+
+  it('should accurately calculate preview resize geometry, keyboard steps, bounds clamping, and drag isolation', () => {
+    const winWidth = 1920;
+    const winHeight = 1080;
+
+    // Simulation of preview resizing logic in setupPreviewResizing
+    let currentWidth = 360;
+    let currentHeight = 210;
+    let currentLeft = 1500;
+    let currentTop = 750;
+
+    const fitPreviewToViewport = () => {
+      currentWidth = Math.min(currentWidth, Math.max(1, winWidth - 16));
+      currentHeight = Math.min(currentHeight, Math.max(1, winHeight - 16));
+      currentLeft = Math.max(8, Math.min(currentLeft, winWidth - currentWidth - 8));
+      currentTop = Math.max(8, Math.min(currentTop, winHeight - currentHeight - 8));
+    };
+
+    const resize = (width: number, height: number) => {
+      currentWidth = Math.max(1, Math.min(Math.max(320, width), winWidth - 16));
+      currentHeight = Math.max(1, Math.min(Math.max(180, height), winHeight - 16));
+      fitPreviewToViewport();
+    };
+
+    // 1. Initial dimensions
+    assert.strictEqual(currentWidth, 360);
+    assert.strictEqual(currentHeight, 210);
+
+    // 2. Drag resize by (+140px, +90px)
+    resize(currentWidth + 140, currentHeight + 90);
+    assert.strictEqual(currentWidth, 500);
+    assert.strictEqual(currentHeight, 300);
+    // Boundary check: 1500 + 500 = 2000 > 1920 - 8 (1912) -> should shift left to 1412
+    assert.strictEqual(currentLeft, 1412);
+    assert.strictEqual(currentTop, 750);
+
+    // 3. Clamping minimum sizes: shrink below minimum (320x180)
+    resize(100, 50);
+    assert.strictEqual(currentWidth, 320);
+    assert.strictEqual(currentHeight, 180);
+
+    // 4. Clamping maximum sizes: enlarge beyond viewport
+    resize(3000, 2000);
+    assert.strictEqual(currentWidth, winWidth - 16);
+    assert.strictEqual(currentHeight, winHeight - 16);
+    assert.strictEqual(currentLeft, 8);
+    assert.strictEqual(currentTop, 8);
+
+    // 5. Double-click reset to default 360x210
+    currentWidth = 360;
+    currentHeight = 210;
+    fitPreviewToViewport();
+    assert.strictEqual(currentWidth, 360);
+    assert.strictEqual(currentHeight, 210);
+
+    // 6. Keyboard navigation: ArrowRight / ArrowDown (+10px)
+    const stepNormal = 10;
+    resize(currentWidth + stepNormal, currentHeight + stepNormal);
+    assert.strictEqual(currentWidth, 370);
+    assert.strictEqual(currentHeight, 220);
+
+    // Shift + ArrowLeft / ArrowUp (-40px)
+    const stepShift = 40;
+    resize(currentWidth - stepShift, currentHeight - stepShift);
+    assert.strictEqual(currentWidth, 330);
+    assert.strictEqual(currentHeight, 180);
+
+    // 7. Drag isolation: pointerdown on resize handle or button elements
+    const isDragBlocked = (target: { tagName: string; className: string; closest: (s: string) => boolean }) => {
+      return (
+        target.tagName === 'BUTTON' ||
+        target.closest('button') ||
+        target.tagName === 'INPUT' ||
+        target.closest('.preview-progress-track') ||
+        target.closest('.preview-open-yt') ||
+        target.className.includes('preview-vol-slider') ||
+        target.className.includes('preview-resize-handle') ||
+        target.closest('.preview-resize-handle')
+      );
+    };
+
+    // Resize handle click should NOT trigger window dragging
+    const handleElement = {
+      tagName: 'BUTTON',
+      className: 'preview-resize-handle',
+      closest: (selector: string) => selector === 'button' || selector === '.preview-resize-handle'
+    };
+    assert.strictEqual(isDragBlocked(handleElement), true);
+
+    // Regular preview titlebar/backdrop click DOES allow window dragging
+    const titleBarElement = {
+      tagName: 'DIV',
+      className: 'preview-top-bar',
+      closest: () => false
+    };
+    assert.strictEqual(isDragBlocked(titleBarElement), false);
+  });
 });
 

@@ -39,7 +39,10 @@ describe('CSS Syntax and Style Validation', () => {
       '.preview-drag-grip',
       '.preview-vol-slider',
       '.preview-prev-track',
-      '.preview-next-track'
+      '.preview-next-track',
+      '.preview-resize-handle',
+      '.preview-hit-shield',
+      '.preview-video-frame'
     ];
 
     for (const rule of requiredRules) {
@@ -48,5 +51,25 @@ describe('CSS Syntax and Style Validation', () => {
         `CONTROL_BAR_STYLES should define rule: ${rule}`
       );
     }
+  });
+
+  it('should have proper z-index layering for preview controls, resize handle, and hit shield', () => {
+    // Verify resize handle z-index is higher than controls overlay and hit shield
+    assert.ok(
+      CONTROL_BAR_STYLES.includes('z-index: 30'),
+      'CONTROL_BAR_STYLES should give preview-resize-handle z-index: 30'
+    );
+    assert.ok(
+      CONTROL_BAR_STYLES.includes('z-index: 10'),
+      'CONTROL_BAR_STYLES should give preview-controls-overlay z-index: 10'
+    );
+    assert.ok(
+      CONTROL_BAR_STYLES.includes('.video-preview-window.is-resizing'),
+      'CONTROL_BAR_STYLES should define is-resizing state rules'
+    );
+    assert.ok(
+      CONTROL_BAR_STYLES.includes('cursor: nwse-resize'),
+      'CONTROL_BAR_STYLES should specify nwse-resize cursor for resizing'
+    );
   });
 });

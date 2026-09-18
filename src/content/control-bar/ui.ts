@@ -38,6 +38,9 @@ export class ControlBarUI {
   private videoPreviewWindow!: HTMLElement;
   private previewTopBar!: HTMLElement;
   private previewThumbImg!: HTMLImageElement;
+  private previewVideoFrame!: HTMLIFrameElement;
+  private currentPreviewVideoId: string | null = null;
+  private lastPreviewPlayingState: boolean | null = null;
   private previewTitleText!: HTMLElement;
   private previewLikeBtn!: HTMLButtonElement;
   private prevThumbOutlineIcon!: SVGElement;
@@ -62,6 +65,8 @@ export class ControlBarUI {
   private previewToggleBtn!: HTMLButtonElement;
   private isPreviewOpen = false;
   private isPreviewDragging = false;
+  private isPreviewResizing = false;
+  private previewControlsHideTimer: any = null;
 
   // Search Modal Elements
   private searchBtn!: HTMLButtonElement;
@@ -480,6 +485,8 @@ export class ControlBarUI {
     previewWindow.innerHTML = `
       <div class="preview-media-wrap">
         <img class="preview-thumb-img" alt="Video Preview" />
+        <iframe class="preview-video-frame" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen title="YouTube Video Preview"></iframe>
+        <div class="preview-hit-shield"></div>
         <div class="preview-controls-overlay">
           <div class="preview-top-bar" title="Drag to move preview">
             <div class="preview-brand">
@@ -628,6 +635,16 @@ export class ControlBarUI {
     this.videoPreviewWindow = previewWindow;
     this.previewTopBar = previewWindow.querySelector('.preview-top-bar')!;
     this.previewThumbImg = previewWindow.querySelector('.preview-thumb-img')!;
+    this.previewVideoFrame = previewWindow.querySelector('.preview-video-frame')!;
+    this.previewVideoFrame.addEventListener('load', () => {
+      this.sendIframeCommand('mute');
+      const state = this.store.getState();
+      if (state && state.isPlaying) {
+        this.sendIframeCommand('playVideo');
+      } else {
+        this.sendIframeCommand('pauseVideo');
+      }
+    });
     this.previewTitleText = previewWindow.querySelector('.preview-title-text')!;
     this.previewLikeBtn = previewWindow.querySelector('.preview-like-btn')!;
     this.prevThumbOutlineIcon = previewWindow.querySelector('.prev-thumb-outline')!;
@@ -980,11 +997,21 @@ export class ControlBarUI {
     this.previewSkipBackBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       this.sendCommand({ type: 'SEEK_RELATIVE', payload: { delta: -10 } });
+      const state = this.store.getState();
+      if (state) {
+        const targetTime = Math.max(0, state.currentTime - 10);
+        this.sendIframeCommand('seekTo', [targetTime, true]);
+      }
     });
 
     this.previewSkipFwdBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       this.sendCommand({ type: 'SEEK_RELATIVE', payload: { delta: 10 } });
+      const state = this.store.getState();
+      if (state) {
+        const targetTime = Math.min(state.duration || 0, state.currentTime + 10);
+        this.sendIframeCommand('seekTo', [targetTime, true]);
+      }
     });
 
     // Video Preview Smart Controls Auto-Hiding (vanishes after 2.5s, appears on hover)
@@ -1010,7 +1037,9 @@ export class ControlBarUI {
       const rect = this.previewProgressTrack.getBoundingClientRect();
       const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
       const duration = this.store.getState()?.duration || 0;
-      this.sendCommand({ type: 'SEEK', payload: { time: ratio * duration } });
+      const targetTime = ratio * duration;
+      this.sendCommand({ type: 'SEEK', payload: { time: targetTime } });
+      this.sendIframeCommand('seekTo', [targetTime, true]);
     });
 
     this.previewOpenYt.addEventListener('click', (e) => {
@@ -1308,6 +1337,7 @@ export class ControlBarUI {
     }
 
     if (!state) {
+      this.stopPreviewVideo();
       this.renderQueue([], false);
       if (tabs.length === 0) {
         this.titleEl.textContent = 'YouTube Controller';
@@ -1411,6 +1441,7 @@ export class ControlBarUI {
       if (state.thumbnailUrl && this.previewThumbImg.src !== state.thumbnailUrl) {
         this.previewThumbImg.src = state.thumbnailUrl;
       }
+      this.syncPreviewVideo(false);
       this.previewPlayIcon.style.display = state.isPlaying ? 'none' : 'block';
       this.previewPauseIcon.style.display = state.isPlaying ? 'block' : 'none';
       const progressRatio = this.store.getCurrentProgressRatio();
@@ -1602,13 +1633,82 @@ export class ControlBarUI {
     this.videoPreviewWindow.classList.toggle('open', this.isPreviewOpen);
     if (this.isPreviewOpen) {
       this.fitPreviewToViewport();
+      this.syncPreviewVideo(true);
       this.updateView();
+    } else {
+      this.stopPreviewVideo();
     }
   }
 
   private closePreview(): void {
     this.isPreviewOpen = false;
     this.videoPreviewWindow.classList.remove('open');
+    if (this.previewControlsHideTimer) {
+      clearTimeout(this.previewControlsHideTimer);
+      this.previewControlsHideTimer = null;
+    }
+    this.videoPreviewWindow.classList.remove('is-hovered');
+    this.stopPreviewVideo();
+  }
+
+  private showPreviewControls(autoHide = true): void {
+    this.videoPreviewWindow.classList.add('is-hovered');
+    if (this.previewControlsHideTimer) clearTimeout(this.previewControlsHideTimer);
+    if (autoHide) {
+      this.previewControlsHideTimer = setTimeout(() => {
+        const state = this.store.getState();
+        if (state && state.isPlaying && !this.isPreviewDragging && !this.isPreviewResizing) {
+          this.videoPreviewWindow.classList.remove('is-hovered');
+        }
+      }, 3500);
+    }
+  }
+
+  private syncPreviewVideo(forceReload = false): void {
+    const state = this.store.getState();
+    if (!state || !state.videoId) {
+      this.stopPreviewVideo();
+      return;
+    }
+
+    if (!this.isPreviewOpen) {
+      return;
+    }
+
+    const videoId = state.videoId;
+    if (this.currentPreviewVideoId !== videoId || forceReload) {
+      this.currentPreviewVideoId = videoId;
+      this.lastPreviewPlayingState = state.isPlaying;
+      const startSeconds = Math.max(0, Math.floor(state.currentTime || 0));
+      const autoplay = state.isPlaying ? 1 : 0;
+      this.previewVideoFrame.src = `https://www.youtube.com/embed/${videoId}?autoplay=${autoplay}&mute=1&controls=0&playsinline=1&enablejsapi=1&rel=0&start=${startSeconds}`;
+      return;
+    }
+
+    if (this.lastPreviewPlayingState !== state.isPlaying) {
+      this.lastPreviewPlayingState = state.isPlaying;
+      this.sendIframeCommand(state.isPlaying ? 'playVideo' : 'pauseVideo');
+    }
+  }
+
+  private stopPreviewVideo(): void {
+    if (this.previewVideoFrame && this.currentPreviewVideoId) {
+      this.sendIframeCommand('pauseVideo');
+      this.previewVideoFrame.src = 'about:blank';
+      this.currentPreviewVideoId = null;
+      this.lastPreviewPlayingState = null;
+    }
+  }
+
+  private sendIframeCommand(func: string, args: any[] = []): void {
+    try {
+      if (this.previewVideoFrame && this.previewVideoFrame.contentWindow) {
+        this.previewVideoFrame.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func, args }),
+          '*'
+        );
+      }
+    } catch {}
   }
 
   private fitPreviewToViewport(): void {
@@ -1648,24 +1748,41 @@ export class ControlBarUI {
       preview.style.height = `${Math.max(1, Math.min(Math.max(180, height), window.innerHeight - 16))}px`;
       this.fitPreviewToViewport();
     };
+    const onMove = (event: PointerEvent) => {
+      if (!start) return;
+      resize(start.width + event.clientX - start.x, start.height + event.clientY - start.y);
+    };
+    const finish = () => {
+      if (start) {
+        start = null;
+        this.isPreviewResizing = false;
+        preview.classList.remove('is-resizing');
+        save();
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', finish);
+      }
+    };
     handle.addEventListener('pointerdown', event => {
       if (event.button !== 0) return;
       event.preventDefault();
       event.stopPropagation();
+      this.isPreviewResizing = true;
+      preview.classList.add('is-resizing');
       this.fitPreviewToViewport();
       const rect = preview.getBoundingClientRect();
       start = { x: event.clientX, y: event.clientY, width: rect.width, height: rect.height, pointerId: event.pointerId };
-      handle.setPointerCapture(event.pointerId);
+      try {
+        handle.setPointerCapture(event.pointerId);
+      } catch {}
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', finish);
     });
-    handle.addEventListener('pointermove', event => {
-      if (!start || event.pointerId !== start.pointerId) return;
-      resize(start.width + event.clientX - start.x, start.height + event.clientY - start.y);
-    });
-    const finish = () => { if (start) { start = null; save(); } };
     handle.addEventListener('pointerup', event => {
       if (!start || event.pointerId !== start.pointerId) return;
       finish();
-      if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+      try {
+        if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+      } catch {}
     });
     handle.addEventListener('pointercancel', finish);
     handle.addEventListener('lostpointercapture', finish);
@@ -1691,10 +1808,20 @@ export class ControlBarUI {
 
   private setupPreviewDragging(): void {
     let isDragging = false;
+    let dragMoved = false;
     let startX = 0;
     let startY = 0;
     let initialLeft = 0;
     let initialTop = 0;
+
+    // Hover & movement tracking to reveal controls overlay over cross-origin video
+    this.videoPreviewWindow.addEventListener('pointerenter', () => this.showPreviewControls(true));
+    this.videoPreviewWindow.addEventListener('pointermove', () => this.showPreviewControls(true));
+    this.videoPreviewWindow.addEventListener('pointerleave', () => {
+      if (this.isPreviewDragging || this.isPreviewResizing) return;
+      if (this.previewControlsHideTimer) clearTimeout(this.previewControlsHideTimer);
+      this.videoPreviewWindow.classList.remove('is-hovered');
+    });
 
     // Restore saved position if available
     try {
@@ -1726,12 +1853,16 @@ export class ControlBarUI {
           target.tagName === 'INPUT' ||
           target.closest('.preview-progress-track') ||
           target.closest('.preview-open-yt') ||
-          target.classList.contains('preview-vol-slider'))
+          target.classList.contains('preview-vol-slider') ||
+          target.classList.contains('preview-vol-slider') ||
+          target.classList.contains('preview-resize-handle') ||
+          target.closest('.preview-resize-handle'))
       ) {
         return;
       }
 
       isDragging = true;
+      dragMoved = false;
       this.isPreviewDragging = true;
       this.videoPreviewWindow.classList.add('is-dragging');
 
@@ -1752,6 +1883,10 @@ export class ControlBarUI {
 
     const onPointerMove = (e: PointerEvent) => {
       if (!isDragging) return;
+
+      if (Math.abs(e.clientX - startX) > 4 || Math.abs(e.clientY - startY) > 4) {
+        dragMoved = true;
+      }
 
       const deltaX = e.clientX - startX;
       const deltaY = e.clientY - startY;
@@ -1774,6 +1909,12 @@ export class ControlBarUI {
       isDragging = false;
       this.isPreviewDragging = false;
       this.videoPreviewWindow.classList.remove('is-dragging');
+
+      if (!dragMoved) {
+        // Direct click on video preview area toggles playback and reveals controls
+        this.showPreviewControls(true);
+        this.sendCommand({ type: 'TOGGLE_PLAY' });
+      }
 
       try {
         (this.videoPreviewWindow as any).releasePointerCapture?.(e.pointerId);
