@@ -113,8 +113,7 @@ svg {
   box-shadow: var(--yt-shadow) !important;
   color: var(--yt-text) !important;
   isolation: isolate !important;
-  contain: layout style paint !important;
-  overflow: hidden !important;
+  contain: layout style !important;
 }
 
 /* Light Mode High-Contrast Overrides */
