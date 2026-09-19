@@ -1713,8 +1713,10 @@ export class ControlBarUI {
 
   private fitPreviewToViewport(): void {
     const preview = this.videoPreviewWindow;
-    const width = Math.min(parseFloat(preview.style.width) || 360, Math.max(1, window.innerWidth - 16));
-    const height = Math.min(parseFloat(preview.style.height) || 210, Math.max(1, window.innerHeight - 16));
+    const maxWidth = Math.max(320, window.innerWidth - 16);
+    const maxHeight = Math.max(180, window.innerHeight - 16);
+    const width = Math.min(Math.max(320, parseFloat(preview.style.width) || 360), maxWidth);
+    const height = Math.min(Math.max(180, parseFloat(preview.style.height) || 210), maxHeight);
     preview.style.width = `${width}px`;
     preview.style.height = `${height}px`;
     const rect = preview.getBoundingClientRect();
@@ -1731,8 +1733,10 @@ export class ControlBarUI {
     try {
       const size = JSON.parse(localStorage.getItem('yt_preview_size') || 'null');
       if (Number.isFinite(size?.width) && Number.isFinite(size?.height)) {
-        preview.style.width = `${Math.max(320, size.width)}px`;
-        preview.style.height = `${Math.max(180, size.height)}px`;
+        const maxWidth = Math.max(320, window.innerWidth - 16);
+        const maxHeight = Math.max(180, window.innerHeight - 16);
+        preview.style.width = `${Math.min(Math.max(320, size.width), maxWidth)}px`;
+        preview.style.height = `${Math.min(Math.max(180, size.height), maxHeight)}px`;
       }
     } catch {}
     const save = () => {
@@ -1744,8 +1748,8 @@ export class ControlBarUI {
       } catch {}
     };
     const resize = (width: number, height: number) => {
-      preview.style.width = `${Math.max(1, Math.min(Math.max(320, width), window.innerWidth - 16))}px`;
-      preview.style.height = `${Math.max(1, Math.min(Math.max(180, height), window.innerHeight - 16))}px`;
+      preview.style.width = `${Math.min(Math.max(320, width), Math.max(320, window.innerWidth - 16))}px`;
+      preview.style.height = `${Math.min(Math.max(180, height), Math.max(180, window.innerHeight - 16))}px`;
       this.fitPreviewToViewport();
     };
     const onMove = (event: PointerEvent) => {

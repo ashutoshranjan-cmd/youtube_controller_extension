@@ -112,6 +112,9 @@ svg {
   border: 1px solid var(--yt-border) !important;
   box-shadow: var(--yt-shadow) !important;
   color: var(--yt-text) !important;
+  isolation: isolate !important;
+  contain: layout style paint !important;
+  overflow: hidden !important;
 }
 
 /* Light Mode High-Contrast Overrides */
@@ -422,6 +425,8 @@ svg {
   outline: none;
   flex-shrink: 0;
   position: relative;
+  overflow: hidden;
+  isolation: isolate;
 }
 
 .like-btn:hover {
@@ -1505,7 +1510,6 @@ input:checked + .slider:before {
   z-index: 10;
 }
 
-.video-preview-window:hover .preview-controls-overlay {
 .video-preview-window:hover .preview-controls-overlay,
 .video-preview-window:focus-within .preview-controls-overlay,
 .video-preview-window.is-hovered .preview-controls-overlay {
@@ -2518,9 +2522,10 @@ input:checked + .slider:before {
 @keyframes ytUnlike { 50% { transform: scale(0.8) rotate(8deg); } }
 .like-btn.pop-anim::after, .preview-like-btn.pop-anim::after {
   content: ''; position: absolute; inset: -4px; border: 2px solid #ff456e;
+  width: auto; height: auto; max-width: 48px; max-height: 48px;
   border-radius: 50%; pointer-events: none; animation: ytLikeRing 0.45s ease-out forwards;
 }
-.preview-like-btn { position: relative; }
+.preview-like-btn { position: relative; overflow: hidden; isolation: isolate; }
 @keyframes ytLikeRing { from { opacity: 0.9; transform: scale(0.7); } to { opacity: 0; transform: scale(1.5); } }
 @media (prefers-reduced-motion: reduce) {
   .like-btn.pop-anim, .preview-like-btn.pop-anim, .like-btn.unlike-anim, .preview-like-btn.unlike-anim { animation: none; }
